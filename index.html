@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Барбершоп Барс</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #e9f5fb;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        h1, h2 {
+            text-align: center;
+            color: #007bff;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        input[type="text"], input[type="date"], input[type="time"], select {
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .appointment {
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .upcoming {
+            background-color: #ffe5e5;
+            color: #d9534f;
+            border: 1px solid #d9534f;
+        }
+
+        .arrived {
+            text-decoration: line-through;
+            color: #aaa;
+        }
+
+        .barber-select {
+            margin: 10px 0;
+        }
+
+        .edit-button, .delete-button, .arrived-button {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            background: transparent;
+            color: #007bff;
+        }
+
+        .edit-button:hover, .delete-button:hover, .arrived-button:hover {
+            background-color: #f0f0f0;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+
+        .date-selector {
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Запись к барберу</h1>
+        <div class="date-selector">
+            <input type="date" id="dateSelector" value="${new Date().toISOString().slice(0, 10)}">
+            <button onclick="renderAppointments()">Показать записи</button>
+        </div>
+        <form id="appointmentForm">
+            <input type="text" id="clientName" placeholder="Имя клиента" required>
+            <input type="date" id="appointmentDate" required>
+            <input type="time" id="appointmentTime" required>
+            <select id="barber" class="barber-select">
+                <option value="Лаура">Лаура</option>
+                <option value="Алмас">Алмас</option>
+            </select>
+            <button type="submit">Записать</button>
+        </form>
+
+        <h2>Записи на <span id="selectedDate">${new Date().toLocaleDateString()}</span></h2>
+        <div class="header-row">
+            <div>Имя</div>
+            <div>Дата</div>
+            <div>Время</div>
+            <div>Барбер</div>
+            <div>Действия</div>
+        </div>
+        <div id="appointmentsList"></div>
+    </div>
+
+    <script>
+        let editingIndex = -1;
+
+        document.getElementById('appointmentForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const clientName = document.getElementById('clientName').value;
+            const appointmentDate = document.getElementById('appointmentDate').value;
+            const appointmentTime = document.getElementById('appointmentTime').value;
+            const barber = document.getElementById('barber').value;
+
+            const appointment = { clientName, appointmentDate, appointmentTime, barber, arrived: false };
+
+            if (editingIndex >= 0) {
+                updateAppointment(editingIndex, appointment);
+            } else {
+                if (isTimeSlotAvailable(appointment)) {
+                    addAppointment(appointment);
+                } else {
+                    alert("Это время занято! Пожалуйста, выберите другое.");
+                    return;
+                }
+            }
+            renderAppointments();
+            this.reset();
+            editingIndex = -1;
+        });
+
+        function addAppointment(appointment) {
+            const appointments = getAppointments();
+            appointments.push(appointment);
+            localStorage.setItem('appointments', JSON.stringify(appointments));
+        }
+
+        function updateAppointment(index, appointment) {
+            const appointments = getAppointments();
+            appointments[index] = appointment;
+            localStorage.setItem('appointments', JSON.stringify(appointments));
+            editingIndex = -1;
+        }
+
+        function deleteAppointment(index) {
+            const appointments = getAppointments();
+            appointments.splice(index, 1);
+            localStorage.setItem('appointments', JSON.stringify(appointments));
+            renderAppointments();
+        }
+
+        function editAppointment(index) {
+            const appointments = getAppointments();
+            const appointment = appointments[index];
+
+            document.getElementById('clientName').value = appointment.clientName;
+            document.getElementById('appointmentDate').value = appointment.appointmentDate;
+            document.getElementById('appointmentTime').value = appointment.appointmentTime;
+            document.getElementById('barber').value = appointment.barber;
+
+            editingIndex = index;
+        }
+
+        function markArrived(index) {
+            const appointments = getAppointments();
+            appointments[index].arrived = true;
+            localStorage.setItem('appointments', JSON.stringify(appointments));
+            renderAppointments();
+        }
+
+        function isTimeSlotAvailable(newAppointment) {
+            const appointments = getAppointments();
+            return !appointments.some(appt => 
+                appt.appointmentDate === newAppointment.appointmentDate && appt.appointmentTime === newAppointment.appointmentTime
+            );
+        }
+
+        function getAppointments() {
+            return JSON.parse(localStorage.getItem('appointments')) || [];
+        }
+
+        function renderAppointments() {
+            const appointmentsList = document.getElementById('appointmentsList');
+            appointmentsList.innerHTML = '';
+
+            const appointments = getAppointments();
+            const selectedDate = document.getElementById('dateSelector').value;
+            const now = new Date();
+
+            appointments.sort((a, b) => {
+                const timeA = new Date(`${a.appointmentDate}T${a.appointmentTime}`);
+                const timeB = new Date(`${b.appointmentDate}T${b.appointmentTime}`);
+                return timeA - timeB;
+            });
+
+            appointments.forEach((appt, index) => {
+                if (appt.appointmentDate !== selectedDate) return;
+
+                const apptTime = new Date(`${appt.appointmentDate}T${appt.appointmentTime}`);
+                const isUpcoming = (apptTime - now) <= 30 * 60 * 1000 && !appt.arrived;
+
+                const formattedDate = new Date(appt.appointmentDate).toLocaleDateString('ru-RU', {
+                    year: '2-digit',
+                    month: '2-digit',
+                    day: '2-digit',
+                }).replace(/\//g, '.');
+
+                const appointmentDiv = document.createElement('div');
+                appointmentDiv.className = 'appointment' + (isUpcoming ? ' upcoming' : '') + (appt.arrived ? ' arrived' : '');
+                appointmentDiv.innerHTML = `
+                    <div>${appt.clientName}</div>
+                    <div>${formattedDate}</div>
+                    <div>${appt.appointmentTime}</div>
+                    <div>${appt.barber}</div>
+                    <div>
+                        <button class="arrived-button" onclick="markArrived(${index})">✓</button>
+                        <button class="edit-button" onclick="editAppointment(${index})">✏️</button>
+                        <button class="delete-button" onclick="deleteAppointment(${index})">❌</button>
+                    </div>
+                `;
+                appointmentsList.appendChild(appointmentDiv);
+
+                if (isUpcoming) {
+                    appointmentDiv.style.backgroundColor = '#ffcccc';
+                }
+            });
+
+            document.getElementById('selectedDate').innerText = new Date(selectedDate).toLocaleDateString();
+        }
+
+        setInterval(renderAppointments, 30000);
+
+        document.addEventListener('DOMContentLoaded', renderAppointments);
+    </script>
+</body>
+</html>
